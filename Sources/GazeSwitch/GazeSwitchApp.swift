@@ -8,7 +8,7 @@ struct GazeSwitchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView()
+            MenuBarView(showWelcome: !appState.hasSeenWelcome)
                 .environment(appState)
                 .onAppear {
                     setupEngine()
@@ -24,6 +24,19 @@ struct GazeSwitchApp: App {
         Window("Calibrate GazeSwitch", id: "calibration") {
             CalibrationView()
                 .environment(appState)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        Window("Welcome to GazeSwitch", id: "welcome") {
+            WelcomeView()
+                .environment(appState)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        Window("About GazeSwitch", id: "about") {
+            AboutView()
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -77,9 +90,13 @@ struct GazeSwitchApp: App {
     private func checkPermissions() {
         AVCaptureDevice.requestAccess(for: .video) { granted in
             if !granted {
-                print("Camera permission denied")
+                Task { @MainActor in
+                    appState.errorMessage = "Camera access denied. Enable in System Settings > Privacy > Camera."
+                }
             }
         }
-        CursorController.requestAccessibilityPermission()
+        if !CursorController.requestAccessibilityPermission() {
+            GazeLog.engine.warning("Accessibility permission not yet granted")
+        }
     }
 }
