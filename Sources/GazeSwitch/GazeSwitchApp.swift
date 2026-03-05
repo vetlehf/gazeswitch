@@ -47,7 +47,7 @@ struct GazeSwitchApp: App {
         }
     }
 
-    private func setupEngine() {
+    @MainActor private func setupEngine() {
         if gazeEngine == nil {
             gazeEngine = GazeEngine(appState: appState)
         }

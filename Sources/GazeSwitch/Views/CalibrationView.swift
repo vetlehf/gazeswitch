@@ -92,7 +92,7 @@ struct CalibrationView: View {
 
     private var positionLabel: String { currentPosition.label }
 
-    @MainActor private func captureCurrentGaze() {
+    private func captureCurrentGaze() {
         isCapturing = true
         statusMessage = "Hold your gaze for 2 seconds..."
         capturedSignals = []

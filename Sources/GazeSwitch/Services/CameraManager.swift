@@ -1,5 +1,5 @@
-@preconcurrency import AVFoundation
-@preconcurrency import Vision
+import AVFoundation
+import Vision
 
 @MainActor
 protocol CameraDelegate: AnyObject {

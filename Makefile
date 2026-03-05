@@ -9,22 +9,24 @@ APP_BUNDLE = build/$(APP_NAME).app
 DMG_NAME = $(APP_NAME)-$(VERSION).dmg
 SIGN_IDENTITY ?= -
 
+SWIFT_FLAGS = -Xswiftc -swift-version -Xswiftc 5
+
 build:
-	swift build
+	swift build $(SWIFT_FLAGS)
 	codesign --force --sign - --entitlements $(ENTITLEMENTS) $(BINARY)
 
 run: build
 	$(BINARY)
 
 test:
-	swift test
+	swift test $(SWIFT_FLAGS)
 
 clean:
 	swift package clean
 	rm -rf build
 
 bundle:
-	swift build -c release
+	swift build -c release $(SWIFT_FLAGS)
 	rm -rf $(APP_BUNDLE)
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS
 	mkdir -p $(APP_BUNDLE)/Contents/Resources

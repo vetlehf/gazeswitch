@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build
-        run: swift build
+        run: swift build -Xswiftc -swift-version -Xswiftc 5
 
       - name: Test
-        run: swift test
+        run: swift test -Xswiftc -swift-version -Xswiftc 5
