@@ -15,7 +15,12 @@ struct MenuBarView: View {
             .padding(.horizontal)
             .padding(.top, 8)
 
-            if !appState.isCalibrated {
+            if let error = appState.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding(.horizontal)
+            } else if !appState.isCalibrated {
                 Text("Calibration required")
                     .font(.caption)
                     .foregroundColor(.orange)

@@ -103,7 +103,13 @@ struct CalibrationView: View {
             collector = col
             manager.delegate = col
             cameraManager = manager
-            try? manager.start()
+            do {
+                try manager.start()
+            } catch {
+                statusMessage = "Camera error: \(error.localizedDescription)"
+                isCapturing = false
+                return
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {

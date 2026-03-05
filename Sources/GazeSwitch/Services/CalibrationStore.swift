@@ -7,9 +7,13 @@ final class CalibrationStore: Sendable {
         if let url = fileURL {
             self.fileURL = url
         } else {
-            let appSupport = FileManager.default.urls(
+            guard let appSupport = FileManager.default.urls(
                 for: .applicationSupportDirectory, in: .userDomainMask
-            ).first!
+            ).first else {
+                self.fileURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent("GazeSwitch-calibration.json")
+                return
+            }
             let dir = appSupport.appendingPathComponent("GazeSwitch")
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             self.fileURL = dir.appendingPathComponent("calibration.json")

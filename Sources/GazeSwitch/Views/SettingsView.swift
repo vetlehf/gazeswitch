@@ -45,17 +45,6 @@ private struct GeneralTab: View {
                     )
                 }
 
-                HStack {
-                    Text("Sensitivity")
-                    Slider(value: Binding(
-                        get: { appState.sensitivity },
-                        set: { appState.sensitivity = $0 }
-                    ), in: 0.1...1.0, step: 0.1) {
-                        Text("Sensitivity")
-                    }
-                    Text(sensitivityLabel)
-                        .frame(width: 60)
-                }
             }
 
             Section("General") {
@@ -93,11 +82,4 @@ private struct GeneralTab: View {
         .padding()
     }
 
-    private var sensitivityLabel: String {
-        switch appState.sensitivity {
-        case ..<0.4: return "Low"
-        case 0.4..<0.7: return "Medium"
-        default: return "High"
-        }
-    }
 }

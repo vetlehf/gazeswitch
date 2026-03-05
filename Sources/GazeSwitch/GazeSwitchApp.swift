@@ -53,23 +53,24 @@ struct GazeSwitchApp: App {
     }
 
     private func setupGlobalHotkey() {
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+        let isHotkey: (NSEvent) -> Bool = { event in
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            if flags == [.command, .shift] && event.keyCode == 14 {
-                DispatchQueue.main.async {
-                    gazeEngine?.toggleTracking()
-                }
+            return flags == [.command, .shift]
+                && event.charactersIgnoringModifiers?.lowercased() == "e"
+        }
+
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            guard isHotkey(event) else { return }
+            DispatchQueue.main.async {
+                gazeEngine?.toggleTracking()
             }
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            if flags == [.command, .shift] && event.keyCode == 14 {
-                DispatchQueue.main.async {
-                    gazeEngine?.toggleTracking()
-                }
-                return nil
+            guard isHotkey(event) else { return event }
+            DispatchQueue.main.async {
+                gazeEngine?.toggleTracking()
             }
-            return event
+            return nil
         }
     }
 

@@ -6,13 +6,19 @@ final class AppState {
     var currentScreenID: UInt32 = 0
     var isCalibrated: Bool = false
     var calibrationData: CalibrationData?
+    var errorMessage: String?
 
-    @ObservationIgnored
-    @AppStorage("dwellTime") var dwellTime: Double = 0.3
+    var dwellTime: Double {
+        get { UserDefaults.standard.double(forKey: "dwellTime").nonZero ?? 0.3 }
+        set { UserDefaults.standard.set(newValue, forKey: "dwellTime") }
+    }
 
-    @ObservationIgnored
-    @AppStorage("sensitivity") var sensitivity: Double = 0.5
+    var launchAtLogin: Bool {
+        get { UserDefaults.standard.bool(forKey: "launchAtLogin") }
+        set { UserDefaults.standard.set(newValue, forKey: "launchAtLogin") }
+    }
+}
 
-    @ObservationIgnored
-    @AppStorage("launchAtLogin") var launchAtLogin: Bool = false
+private extension Double {
+    var nonZero: Double? { self == 0 ? nil : self }
 }

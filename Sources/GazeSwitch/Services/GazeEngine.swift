@@ -49,8 +49,9 @@ final class GazeEngine: CameraDelegate {
         do {
             try cameraManager.start()
             appState.isTracking = true
+            appState.errorMessage = nil
         } catch {
-            print("Failed to start camera: \(error)")
+            appState.errorMessage = "Camera failed: \(error.localizedDescription)"
         }
     }
 
@@ -68,9 +69,10 @@ final class GazeEngine: CameraDelegate {
             try calibrationStore.save(data)
             appState.calibrationData = data
             appState.isCalibrated = true
+            appState.errorMessage = nil
             resolver = MonitorResolver(calibration: data)
         } catch {
-            print("Failed to save calibration: \(error)")
+            appState.errorMessage = "Failed to save calibration: \(error.localizedDescription)"
         }
     }
 
