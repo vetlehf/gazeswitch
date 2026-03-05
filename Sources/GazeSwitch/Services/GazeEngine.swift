@@ -36,9 +36,10 @@ final class GazeEngine: CameraDelegate {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let data = notification.object as? CalibrationData else { return }
+            guard let engine = self,
+                  let data = notification.object as? CalibrationData else { return }
             Task { @MainActor in
-                self?.updateCalibration(data)
+                engine.updateCalibration(data)
             }
         })
 
@@ -47,9 +48,10 @@ final class GazeEngine: CameraDelegate {
             object: nil,
             queue: .main
         ) { [weak self] notification in
-            guard let duration = notification.object as? Double else { return }
+            guard let engine = self,
+                  let duration = notification.object as? Double else { return }
             Task { @MainActor in
-                self?.updateDwellTime(duration)
+                engine.updateDwellTime(duration)
             }
         })
 
@@ -58,8 +60,9 @@ final class GazeEngine: CameraDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
+            guard let engine = self else { return }
             Task { @MainActor in
-                self?.handleCameraChanged()
+                engine.handleCameraChanged()
             }
         })
     }
