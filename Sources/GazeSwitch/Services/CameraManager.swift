@@ -1,10 +1,9 @@
 import AVFoundation
 import Vision
 
-@MainActor
 protocol CameraDelegate: AnyObject {
-    func cameraDidCapture(faceObservation: VNFaceObservation)
-    func cameraDidFail(error: Error)
+    @MainActor func cameraDidCapture(faceObservation: VNFaceObservation)
+    @MainActor func cameraDidFail(error: Error)
 }
 
 final class CameraManager: NSObject, @unchecked Sendable {
@@ -12,7 +11,7 @@ final class CameraManager: NSObject, @unchecked Sendable {
     private let videoOutput = AVCaptureVideoDataOutput()
     private let processingQueue = DispatchQueue(label: "com.gazeswitch.camera", qos: .userInteractive)
 
-    nonisolated(unsafe) weak var delegate: CameraDelegate?
+    weak var delegate: CameraDelegate?
     private var isFrontFacing: Bool = true
 
     private let faceLandmarksRequest: VNDetectFaceLandmarksRequest

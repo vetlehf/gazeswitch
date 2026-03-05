@@ -174,7 +174,7 @@ struct CalibrationView: View {
     }
 }
 
-final class CalibrationCollector: CameraDelegate, @unchecked Sendable {
+final class CalibrationCollector: CameraDelegate {
     private let onSignal: (GazeSignal) -> Void
 
     init(onSignal: @escaping (GazeSignal) -> Void) {

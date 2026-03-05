@@ -74,13 +74,13 @@ struct GazeSwitchApp: App {
 
         NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
             guard isHotkey(event) else { return }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 gazeEngine?.toggleTracking()
             }
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard isHotkey(event) else { return event }
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 gazeEngine?.toggleTracking()
             }
             return nil

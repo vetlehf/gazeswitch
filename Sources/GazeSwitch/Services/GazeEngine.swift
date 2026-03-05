@@ -31,16 +31,14 @@ final class GazeEngine: CameraDelegate {
             GazeLog.engine.info("Loaded calibration with \(data.monitors.count) monitors")
         }
 
-        nonisolated(unsafe) let weakSelf = { [weak self] in self }
-
         observers.append(NotificationCenter.default.addObserver(
             forName: .calibrationCompleted,
             object: nil,
             queue: .main
-        ) { notification in
+        ) { [weak self] notification in
             guard let data = notification.object as? CalibrationData else { return }
             Task { @MainActor in
-                weakSelf()?.updateCalibration(data)
+                self?.updateCalibration(data)
             }
         })
 
@@ -48,10 +46,10 @@ final class GazeEngine: CameraDelegate {
             forName: .dwellTimeChanged,
             object: nil,
             queue: .main
-        ) { notification in
+        ) { [weak self] notification in
             guard let duration = notification.object as? Double else { return }
             Task { @MainActor in
-                weakSelf()?.updateDwellTime(duration)
+                self?.updateDwellTime(duration)
             }
         })
 
@@ -59,9 +57,9 @@ final class GazeEngine: CameraDelegate {
             forName: .cameraChanged,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             Task { @MainActor in
-                weakSelf()?.handleCameraChanged()
+                self?.handleCameraChanged()
             }
         })
     }
