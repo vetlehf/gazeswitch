@@ -6,7 +6,7 @@ struct CalibrationView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var currentStep = 0
-    @State private var samples: [(screenID: UInt32, signal: GazeSignal)] = []
+    @State private var samples: [(screenID: UInt32, position: CalibrationPosition, signal: GazeSignal)] = []
     @State private var isCapturing = false
     @State private var capturedSignals: [GazeSignal] = []
     @State private var cameraManager: CameraManager?
@@ -17,6 +17,10 @@ struct CalibrationView: View {
         MonitorInfo.allMonitors()
     }
 
+    private var totalSteps: Int { screens.count * CalibrationPosition.allCases.count }
+    private var currentScreenIndex: Int { currentStep / CalibrationPosition.allCases.count }
+    private var currentPosition: CalibrationPosition { CalibrationPosition.allCases[currentStep % CalibrationPosition.allCases.count] }
+
     var body: some View {
         VStack(spacing: 24) {
             Text("Calibration")
@@ -26,7 +30,7 @@ struct CalibrationView: View {
             if screens.count < 2 {
                 Text("Connect at least 2 monitors to use GazeSwitch.")
                     .foregroundColor(.orange)
-            } else if currentStep < screens.count {
+            } else if currentStep < totalSteps {
                 calibrationStepView
             } else {
                 completionView
@@ -36,18 +40,16 @@ struct CalibrationView: View {
         .frame(minWidth: 500, minHeight: 350)
         .onDisappear {
             cameraManager?.stop()
-            if NSApp.windows.filter({ $0.isVisible }).isEmpty {
-                NSApp.setActivationPolicy(.accessory)
-            }
         }
+        .restoreAccessoryPolicyOnDismiss()
     }
 
     private var calibrationStepView: some View {
         VStack(spacing: 16) {
-            Text("Step \(currentStep + 1) of \(screens.count)")
+            Text("Step \(currentStep + 1) of \(totalSteps)")
                 .font(.headline)
 
-            Text("Look at the center of **\(screens[currentStep].name)** and press the button below.")
+            Text("Look at the **\(positionLabel)** of **\(screens[currentScreenIndex].name)** and press the button below.")
                 .multilineTextAlignment(.center)
 
             Circle()
@@ -77,7 +79,7 @@ struct CalibrationView: View {
             Text("Calibration Complete!")
                 .font(.headline)
 
-            Text("\(screens.count) monitors calibrated.")
+            Text("\(screens.count) monitors calibrated (5 points each).")
                 .foregroundColor(.secondary)
 
             Button("Done") {
@@ -88,6 +90,8 @@ struct CalibrationView: View {
         }
     }
 
+    private var positionLabel: String { currentPosition.label }
+
     private func captureCurrentGaze() {
         isCapturing = true
         statusMessage = "Hold your gaze for 2 seconds..."
@@ -96,15 +100,13 @@ struct CalibrationView: View {
         if cameraManager == nil {
             let manager = CameraManager()
             let col = CalibrationCollector(onSignal: { signal in
-                Task { @MainActor in
-                    capturedSignals.append(signal)
-                }
+                capturedSignals.append(signal)
             })
             collector = col
             manager.delegate = col
             cameraManager = manager
             do {
-                try manager.start()
+                try manager.start(withDeviceID: appState.selectedCameraID)
             } catch {
                 statusMessage = "Camera error: \(error.localizedDescription)"
                 isCapturing = false
@@ -128,32 +130,39 @@ struct CalibrationView: View {
         let avgYaw = capturedSignals.map(\.yaw).reduce(0, +) / Double(capturedSignals.count)
         let avgSignal = GazeSignal(pupilRatio: avgPupil, yaw: avgYaw)
 
-        let screen = screens[currentStep]
-        samples.append((screenID: screen.displayID, signal: avgSignal))
+        let screen = screens[currentScreenIndex]
+        samples.append((screenID: screen.displayID, position: currentPosition, signal: avgSignal))
 
         capturedSignals = []
         currentStep += 1
         isCapturing = false
-        statusMessage = currentStep < screens.count
-            ? "Ready for next monitor"
-            : "All monitors captured!"
+        statusMessage = currentStep < totalSteps
+            ? "Ready for next position"
+            : "All positions captured!"
     }
 
     private func saveCalibration() {
-        let monitors = samples.map { sample in
-            let screen = screens.first { $0.displayID == sample.screenID }
+        let grouped = Dictionary(grouping: samples, by: { $0.screenID })
+        let monitors = grouped.map { (screenID, screenSamples) -> MonitorCalibration in
+            let screen = screens.first { $0.displayID == screenID }
+            let centerSample = screenSamples.first { $0.position == .center }
+            let gazeCenter = centerSample?.signal ?? screenSamples[0].signal
+            let gazePoints = screenSamples.map {
+                CalibrationPoint(position: $0.position, signal: $0.signal)
+            }
             return MonitorCalibration(
-                screenID: sample.screenID,
-                gazeCenter: sample.signal,
-                screenCenter: screen?.center ?? .zero
+                screenID: screenID,
+                gazeCenter: gazeCenter,
+                screenCenter: screen?.center ?? .zero,
+                gazePoints: gazePoints
             )
         }
 
-        let sorted = monitors.sorted { $0.gazeCenter.combinedScore() < $1.gazeCenter.combinedScore() }
+        let scored = monitors.map { ($0, $0.gazeCenter.combinedScore()) }
+        let sorted = scored.sorted { $0.1 < $1.1 }
         var boundaries: [Double] = []
         for i in 0..<(sorted.count - 1) {
-            let mid = (sorted[i].gazeCenter.combinedScore() + sorted[i + 1].gazeCenter.combinedScore()) / 2.0
-            boundaries.append(mid)
+            boundaries.append((sorted[i].1 + sorted[i + 1].1) / 2.0)
         }
 
         let data = CalibrationData(monitors: monitors, boundaries: boundaries)
@@ -165,10 +174,11 @@ struct CalibrationView: View {
     }
 }
 
+@MainActor
 final class CalibrationCollector: CameraDelegate {
-    private let onSignal: @Sendable (GazeSignal) -> Void
+    private let onSignal: (GazeSignal) -> Void
 
-    init(onSignal: @escaping @Sendable (GazeSignal) -> Void) {
+    init(onSignal: @escaping (GazeSignal) -> Void) {
         self.onSignal = onSignal
     }
 
@@ -179,6 +189,6 @@ final class CalibrationCollector: CameraDelegate {
     }
 
     func cameraDidFail(error: Error) {
-        print("Calibration camera error: \(error)")
+        GazeLog.camera.error("Calibration camera error: \(error.localizedDescription, privacy: .public)")
     }
 }

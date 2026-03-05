@@ -1,17 +1,19 @@
 @preconcurrency import AVFoundation
 @preconcurrency import Vision
 
+@MainActor
 protocol CameraDelegate: AnyObject {
     func cameraDidCapture(faceObservation: VNFaceObservation)
     func cameraDidFail(error: Error)
 }
 
-final class CameraManager: NSObject, Sendable {
+final class CameraManager: NSObject, @unchecked Sendable {
     private let captureSession = AVCaptureSession()
     private let videoOutput = AVCaptureVideoDataOutput()
     private let processingQueue = DispatchQueue(label: "com.gazeswitch.camera", qos: .userInteractive)
 
     nonisolated(unsafe) weak var delegate: CameraDelegate?
+    private var isFrontFacing: Bool = true
 
     private let faceLandmarksRequest: VNDetectFaceLandmarksRequest
 
@@ -23,12 +25,36 @@ final class CameraManager: NSObject, Sendable {
         super.init()
     }
 
-    func start() throws {
-        guard let camera = AVCaptureDevice.default(
-            .builtInWideAngleCamera, for: .video, position: .front
-        ) ?? AVCaptureDevice.default(for: .video) else {
-            throw CameraError.noCameraAvailable
+    static func availableCameras() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .external],
+            mediaType: .video,
+            position: .unspecified
+        ).devices
+    }
+
+    private func clearSession() {
+        captureSession.inputs.forEach { captureSession.removeInput($0) }
+        captureSession.outputs.forEach { captureSession.removeOutput($0) }
+    }
+
+    func start(withDeviceID deviceID: String? = nil) throws {
+        clearSession()
+
+        let camera: AVCaptureDevice
+        if let deviceID, let device = AVCaptureDevice(uniqueID: deviceID) {
+            camera = device
+        } else {
+            guard let defaultCamera = AVCaptureDevice.default(
+                .builtInWideAngleCamera, for: .video, position: .front
+            ) ?? AVCaptureDevice.default(for: .video) else {
+                throw CameraError.noCameraAvailable
+            }
+            camera = defaultCamera
         }
+
+        isFrontFacing = camera.position == .front
+        GazeLog.camera.info("Starting camera: \(camera.localizedName, privacy: .public) (front=\(self.isFrontFacing))")
 
         let input = try AVCaptureDeviceInput(device: camera)
         guard captureSession.canAddInput(input) else {
@@ -44,10 +70,13 @@ final class CameraManager: NSObject, Sendable {
         }
         captureSession.addOutput(videoOutput)
         captureSession.startRunning()
+        GazeLog.camera.info("Camera session running")
     }
 
     func stop() {
         captureSession.stopRunning()
+        clearSession()
+        GazeLog.camera.info("Camera session stopped")
     }
 
     enum CameraError: Error, LocalizedError {
@@ -73,19 +102,29 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     ) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
+        let orientation: CGImagePropertyOrientation = isFrontFacing ? .leftMirrored : .up
         let handler = VNImageRequestHandler(
             cvPixelBuffer: pixelBuffer,
-            orientation: .leftMirrored,
+            orientation: orientation,
             options: [:]
         )
 
         do {
             try handler.perform([faceLandmarksRequest])
             if let results = faceLandmarksRequest.results, let face = results.first {
-                delegate?.cameraDidCapture(faceObservation: face)
+                GazeLog.camera.debug("Face detected: yaw=\(face.yaw?.doubleValue ?? 0, privacy: .public)")
+                DispatchQueue.main.async { [weak self] in
+                    self?.delegate?.cameraDidCapture(faceObservation: face)
+                }
+            } else {
+                GazeLog.camera.debug("No face in frame")
             }
         } catch {
-            delegate?.cameraDidFail(error: error)
+            GazeLog.camera.error("Vision error: \(error.localizedDescription, privacy: .public)")
+            let capturedError = error
+            DispatchQueue.main.async { [weak self] in
+                self?.delegate?.cameraDidFail(error: capturedError)
+            }
         }
     }
 }

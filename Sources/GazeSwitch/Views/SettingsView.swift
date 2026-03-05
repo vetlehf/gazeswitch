@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import AVFoundation
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
@@ -12,7 +13,7 @@ struct SettingsView: View {
                     Label("General", systemImage: "gear")
                 }
         }
-        .frame(width: 400, height: 250)
+        .frame(width: 400, height: 300)
         .onDisappear {
             if NSApp.windows.filter({ $0.isVisible }).isEmpty {
                 NSApp.setActivationPolicy(.accessory)
@@ -23,11 +24,26 @@ struct SettingsView: View {
 
 private struct GeneralTab: View {
     @Environment(AppState.self) private var appState
-    @AppStorage("dwellTime") private var dwellTime: Double = 0.3
-    @AppStorage("launchAtLogin") private var launchAtLogin: Bool = false
+    @State private var dwellTime: Double = 0.3
+    @State private var launchAtLogin: Bool = false
+    @State private var cameras: [AVCaptureDevice] = []
+    @State private var selectedCameraID: String = ""
 
     var body: some View {
         Form {
+            Section("Camera") {
+                Picker("Camera", selection: $selectedCameraID) {
+                    Text("Default").tag("")
+                    ForEach(cameras, id: \.uniqueID) { camera in
+                        Text(camera.localizedName).tag(camera.uniqueID)
+                    }
+                }
+                .onChange(of: selectedCameraID) { _, newValue in
+                    appState.selectedCameraID = newValue.isEmpty ? nil : newValue
+                    NotificationCenter.default.post(name: .cameraChanged, object: nil)
+                }
+            }
+
             Section("Tracking") {
                 HStack {
                     Text("Dwell time")
@@ -39,31 +55,29 @@ private struct GeneralTab: View {
                         .frame(width: 50)
                 }
                 .onChange(of: dwellTime) { _, newValue in
+                    appState.dwellTime = newValue
                     NotificationCenter.default.post(
                         name: .dwellTimeChanged,
                         object: newValue
                     )
                 }
-
             }
 
             Section("General") {
-                Toggle("Launch at login", isOn: Binding(
-                    get: { launchAtLogin },
-                    set: { newValue in
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, newValue in
                         do {
                             if newValue {
                                 try SMAppService.mainApp.register()
                             } else {
                                 try SMAppService.mainApp.unregister()
                             }
-                            launchAtLogin = newValue
+                            appState.launchAtLogin = newValue
                         } catch {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
-                            print("Login item error: \(error)")
+                            GazeLog.engine.error("Login item error: \(error.localizedDescription, privacy: .public)")
                         }
                     }
-                ))
             }
 
             Section("Shortcut") {
@@ -80,6 +94,11 @@ private struct GeneralTab: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            cameras = CameraManager.availableCameras()
+            selectedCameraID = appState.selectedCameraID ?? ""
+            dwellTime = appState.dwellTime
+            launchAtLogin = appState.launchAtLogin
+        }
     }
-
 }

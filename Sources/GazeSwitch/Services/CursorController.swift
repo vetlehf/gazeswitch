@@ -13,14 +13,27 @@ enum CursorController {
 
     @discardableResult
     static func warpToScreen(_ screen: NSScreen) -> Bool {
+        guard hasAccessibilityPermission() else {
+            GazeLog.cursor.warning("Warp blocked: no accessibility permission")
+            return false
+        }
         guard let primaryHeight = NSScreen.screens.first?.frame.height else { return false }
         let center = screenCenter(frame: screen.frame, primaryScreenHeight: primaryHeight)
-        return CGWarpMouseCursorPosition(center) == .success
+        GazeLog.cursor.info("Warping to (\(center.x, privacy: .public), \(center.y, privacy: .public))")
+        let result = CGWarpMouseCursorPosition(center)
+        if result != .success {
+            GazeLog.cursor.error("CGWarpMouseCursorPosition failed: \(result.rawValue)")
+        }
+        return result == .success
     }
 
     @discardableResult
     static func warp(to cgPoint: CGPoint) -> Bool {
-        CGWarpMouseCursorPosition(cgPoint) == .success
+        guard hasAccessibilityPermission() else {
+            GazeLog.cursor.warning("Warp blocked: no accessibility permission")
+            return false
+        }
+        return CGWarpMouseCursorPosition(cgPoint) == .success
     }
 
     static func hasAccessibilityPermission() -> Bool {

@@ -68,4 +68,28 @@ final class GazeEstimatorTests: XCTestCase {
 
         XCTAssertEqual(signal.pupilRatio, 0.5, accuracy: 0.01)
     }
+
+    func testEstimate_bothEyesAveraged() {
+        let signal = GazeEstimator.estimate(leftPupilRatio: 0.4, rightPupilRatio: 0.6, headYaw: 0.0)
+        XCTAssertNotNil(signal)
+        XCTAssertEqual(signal!.pupilRatio, 0.5, accuracy: 0.001)
+        XCTAssertEqual(signal!.yaw, 0.0, accuracy: 0.001)
+    }
+
+    func testEstimate_leftEyeOnlyFallback() {
+        let signal = GazeEstimator.estimate(leftPupilRatio: 0.4, rightPupilRatio: nil, headYaw: 0.1)
+        XCTAssertNotNil(signal)
+        XCTAssertEqual(signal!.pupilRatio, 0.4, accuracy: 0.001)
+    }
+
+    func testEstimate_rightEyeOnlyFallback() {
+        let signal = GazeEstimator.estimate(leftPupilRatio: nil, rightPupilRatio: 0.6, headYaw: -0.1)
+        XCTAssertNotNil(signal)
+        XCTAssertEqual(signal!.pupilRatio, 0.6, accuracy: 0.001)
+    }
+
+    func testEstimate_noEyesReturnsNil() {
+        let signal = GazeEstimator.estimate(leftPupilRatio: nil, rightPupilRatio: nil, headYaw: 0.0)
+        XCTAssertNil(signal)
+    }
 }
