@@ -10,7 +10,7 @@ let package = Package(
         .executableTarget(
             name: "GazeSwitch",
             path: "Sources/GazeSwitch",
-            exclude: ["Resources/Info.plist"],
+            exclude: ["Resources/Info.plist", "Resources/AppIcon.icns"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",

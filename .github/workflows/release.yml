@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
+          rm certificate.p12
+
+      - name: Build release bundle
+        run: make bundle
+
+      - name: Sign (if certificate available)
+        if: env.MACOS_CERTIFICATE != ''
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+        run: make sign SIGN_IDENTITY="$SIGN_IDENTITY"
+
+      - name: Create DMG
+        run: make dmg
+
+      - name: Notarize (if credentials available)
+        if: env.NOTARIZE_APPLE_ID != ''
+        env:
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+        run: |
+          xcrun notarytool store-credentials "AC_PASSWORD" \
+            --apple-id "${{ secrets.NOTARIZE_APPLE_ID }}" \
+            --team-id "${{ secrets.NOTARIZE_TEAM_ID }}" \
+            --password "${{ secrets.NOTARIZE_PASSWORD }}"
+          make notarize
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/GazeSwitch-*.dmg
+          generate_release_notes: true

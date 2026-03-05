@@ -3,17 +3,27 @@
     "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSCameraUsageDescription</key>
-    <string>GazeSwitch needs camera access to track your eye gaze and determine which monitor you are looking at.</string>
-    <key>LSUIElement</key>
-    <true/>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>GazeSwitch</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleIdentifier</key>
     <string>com.gazeswitch.app</string>
     <key>CFBundleName</key>
     <string>GazeSwitch</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>GazeSwitch needs camera access to track your eye gaze and determine which monitor you are looking at.</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>GazeSwitch needs accessibility access to move the mouse cursor between monitors.</string>
 </dict>
 </plist>
