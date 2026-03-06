@@ -5,5 +5,17 @@
     <link>https://raw.githubusercontent.com/vetlehf/gazeswitch/main/appcast.xml</link>
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
+    <item>
+      <title>Version 1.1.0</title>
+      <pubDate>Fri, 06 Mar 2026 14:31:16 +0000</pubDate>
+      <sparkle:version>1.1.0</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <enclosure
+        url="https://github.com/vetlehf/gazeswitch/releases/download/v1.1.0/GazeSwitch-v1.1.0.dmg"
+        sparkle:edSignature="4sBuNa4FnuVTCESHGVrMU1A7EDmsaJ8xAGPUR6YOFLDXUO3Dt8hmlWmj6yVbSjDZSQiwcuRtW/xEi214acpBDw=="
+        length="3235324"
+        type="application/octet-stream" />
+    </item>
   </channel>
 </rss>
