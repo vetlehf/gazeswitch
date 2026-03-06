@@ -8,7 +8,7 @@ struct GazeSwitchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(showWelcome: !appState.hasSeenWelcome)
+            MenuBarView()
                 .environment(appState)
                 .onAppear {
                     setupEngine()

@@ -6,13 +6,13 @@ struct MenuBarView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
 
-    let showWelcome: Bool
+    @State private var hasOpenedWelcome = false
 
-    @State private var cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
-    @State private var accessibilityPermission = AXIsProcessTrusted()
-
-    init(showWelcome: Bool = false) {
-        self.showWelcome = showWelcome
+    private var cameraGranted: Bool {
+        AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+    }
+    private var accessibilityGranted: Bool {
+        AXIsProcessTrusted()
     }
 
     var body: some View {
@@ -38,7 +38,7 @@ struct MenuBarView: View {
                     .padding(.horizontal)
             }
 
-            if cameraPermission != .authorized || !accessibilityPermission {
+            if !cameraGranted || !accessibilityGranted {
                 permissionWarnings
             }
 
@@ -89,9 +89,8 @@ struct MenuBarView: View {
         }
         .frame(width: 200)
         .onAppear {
-            cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
-            accessibilityPermission = AXIsProcessTrusted()
-            if showWelcome {
+            if !appState.hasSeenWelcome && !hasOpenedWelcome {
+                hasOpenedWelcome = true
                 openWindow(id: "welcome")
                 NSApp.setActivationPolicy(.regular)
                 NSApp.activate(ignoringOtherApps: true)
@@ -101,13 +100,13 @@ struct MenuBarView: View {
 
     private var permissionWarnings: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if cameraPermission != .authorized {
+            if !cameraGranted {
                 permissionWarningButton(
                     label: "Camera not granted",
                     url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera"
                 )
             }
-            if !accessibilityPermission {
+            if !accessibilityGranted {
                 permissionWarningButton(
                     label: "Accessibility not granted",
                     url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
