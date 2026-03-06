@@ -5,16 +5,19 @@ import AVFoundation
 struct GazeSwitchApp: App {
     @State private var appState = AppState()
     @State private var gazeEngine: GazeEngine?
+    @StateObject private var updaterService = UpdaterService()
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView()
                 .environment(appState)
+                .environmentObject(updaterService)
                 .onAppear {
                     setupEngine()
                     setupNotifications()
                     setupGlobalHotkey()
                     checkPermissions()
+                    updaterService.startUpdater()
                 }
         } label: {
             Image(systemName: appState.isTracking ? "eye.fill" : "eye")
@@ -44,6 +47,7 @@ struct GazeSwitchApp: App {
         Settings {
             SettingsView()
                 .environment(appState)
+                .environmentObject(updaterService)
         }
     }
 

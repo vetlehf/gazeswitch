@@ -8,6 +8,7 @@ ENTITLEMENTS = GazeSwitch.entitlements
 APP_BUNDLE = build/$(APP_NAME).app
 DMG_NAME = $(APP_NAME)-$(VERSION).dmg
 SIGN_IDENTITY ?= -
+SPARKLE_FRAMEWORK = $(shell find .build/artifacts -name "Sparkle.framework" -path "*/macos*" -type d 2>/dev/null | head -1)
 
 SWIFT_FLAGS = -Xswiftc -swift-version -Xswiftc 5
 
@@ -30,9 +31,11 @@ bundle:
 	rm -rf $(APP_BUNDLE)
 	mkdir -p $(APP_BUNDLE)/Contents/MacOS
 	mkdir -p $(APP_BUNDLE)/Contents/Resources
+	mkdir -p $(APP_BUNDLE)/Contents/Frameworks
 	cp $(RELEASE_BINARY) $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 	cp Sources/GazeSwitch/Resources/Info.plist $(APP_BUNDLE)/Contents/Info.plist
 	cp Sources/GazeSwitch/Resources/AppIcon.icns $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
+	cp -aR $(SPARKLE_FRAMEWORK) $(APP_BUNDLE)/Contents/Frameworks/
 	codesign --force --sign - --entitlements $(ENTITLEMENTS) --deep $(APP_BUNDLE)
 	@echo "Created $(APP_BUNDLE)"
 

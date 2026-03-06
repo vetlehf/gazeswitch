@@ -25,5 +25,11 @@
     <string>GazeSwitch needs camera access to track your eye gaze and determine which monitor you are looking at.</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>GazeSwitch needs accessibility access to move the mouse cursor between monitors.</string>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/vetlehf/gazeswitch/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>ktZZwkqBGSvw36+DMxHpH8wFINzqa5hPoxe3hCrdwhs=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>

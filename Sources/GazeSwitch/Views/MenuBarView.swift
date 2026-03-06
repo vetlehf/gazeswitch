@@ -5,6 +5,7 @@ import AVFoundation
 struct MenuBarView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openWindow) private var openWindow
+    @EnvironmentObject var updaterService: UpdaterService
 
     @State private var hasOpenedWelcome = false
 
@@ -69,6 +70,12 @@ struct MenuBarView: View {
                 NSApp.setActivationPolicy(.regular)
                 NSApp.activate(ignoringOtherApps: true)
             }
+            .padding(.horizontal)
+
+            Button("Check for Updates...") {
+                updaterService.checkForUpdates()
+            }
+            .disabled(!updaterService.canCheckForUpdates)
             .padding(.horizontal)
 
             Divider()

@@ -6,9 +6,15 @@ let package = Package(
     platforms: [
         .macOS(.v14)
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.0.0")
+    ],
     targets: [
         .executableTarget(
             name: "GazeSwitch",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/GazeSwitch",
             exclude: ["Resources/Info.plist", "Resources/AppIcon.icns"],
             linkerSettings: [
@@ -16,7 +22,9 @@ let package = Package(
                     "-Xlinker", "-sectcreate",
                     "-Xlinker", "__TEXT",
                     "-Xlinker", "__info_plist",
-                    "-Xlinker", "Sources/GazeSwitch/Resources/Info.plist"
+                    "-Xlinker", "Sources/GazeSwitch/Resources/Info.plist",
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@loader_path/../Frameworks"
                 ])
             ]
         ),

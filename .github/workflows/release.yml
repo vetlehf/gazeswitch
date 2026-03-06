@@ -45,30 +45,77 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
+      # --- Download Sparkle tools for EdDSA signing ---
+      - name: Download Sparkle tools
+        run: |
+          SPARKLE_VERSION=$(swift package show-dependencies --format json | python3 -c "import sys,json; deps=json.load(sys.stdin).get('dependencies',[]); print(next((d['version'] for d in deps if 'sparkle' in d.get('identity','')), '2.9.0'))")
+          echo "Using Sparkle tools version: $SPARKLE_VERSION"
+          curl -sL -o /tmp/Sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz"
+          mkdir -p /tmp/sparkle-tools
+          tar -xf /tmp/Sparkle.tar.xz -C /tmp/sparkle-tools
+
       # --- Build ---
       - name: Build release binary
         run: swift build -c release $SWIFT_FLAGS
 
+      # --- Create app bundle with Sparkle.framework ---
       - name: Create app bundle
         run: |
+          SPARKLE_FW=$(find .build/artifacts -name "Sparkle.framework" -path "*/macos*" -type d | head -1)
+          if [ -z "$SPARKLE_FW" ]; then
+            echo "::error::Sparkle.framework not found in build artifacts"
+            exit 1
+          fi
+          echo "Found Sparkle.framework at: $SPARKLE_FW"
+
           rm -rf $APP_BUNDLE
           mkdir -p $APP_BUNDLE/Contents/MacOS
           mkdir -p $APP_BUNDLE/Contents/Resources
+          mkdir -p $APP_BUNDLE/Contents/Frameworks
           cp .build/release/$APP_NAME $APP_BUNDLE/Contents/MacOS/$APP_NAME
           cp Sources/GazeSwitch/Resources/Info.plist $APP_BUNDLE/Contents/Info.plist
           cp Sources/GazeSwitch/Resources/AppIcon.icns $APP_BUNDLE/Contents/Resources/AppIcon.icns
+          cp -aR "$SPARKLE_FW" $APP_BUNDLE/Contents/Frameworks/
 
-      # --- Sign ---
+      # --- Sign (individual Sparkle components, then app — never --deep) ---
       - name: Sign with Developer ID
         if: env.MACOS_CERTIFICATE != ''
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
         run: |
+          FW_DIR="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B"
+
+          # Sign Sparkle XPC services
+          if [ -d "$FW_DIR/XPCServices/Installer.xpc" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime \
+              "$FW_DIR/XPCServices/Installer.xpc"
+          fi
+          if [ -d "$FW_DIR/XPCServices/Downloader.xpc" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime \
+              --preserve-metadata=entitlements \
+              "$FW_DIR/XPCServices/Downloader.xpc"
+          fi
+
+          # Sign Sparkle helper tools
+          if [ -f "$FW_DIR/Autoupdate" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime "$FW_DIR/Autoupdate"
+          fi
+          if [ -d "$FW_DIR/Updater.app" ]; then
+            codesign --force --sign "$SIGN_IDENTITY" --options runtime "$FW_DIR/Updater.app"
+          fi
+
+          # Sign the Sparkle framework itself
+          codesign --force --sign "$SIGN_IDENTITY" --options runtime \
+            "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+
+          # Sign the main app (NO --deep)
           codesign --force --sign "$SIGN_IDENTITY" \
             --entitlements $ENTITLEMENTS \
-            --deep --options runtime --timestamp \
+            --options runtime --timestamp \
             $APP_BUNDLE
+
           codesign --verify --verbose $APP_BUNDLE
 
       - name: Ad-hoc sign (fallback)
@@ -89,6 +136,67 @@ jobs:
         with:
           files: build/GazeSwitch-*.dmg
           generate_release_notes: true
+
+      # --- Generate and publish appcast ---
+      - name: Update appcast.xml
+        if: env.SPARKLE_ED_PRIVATE_KEY != ''
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          DMG_NAME="${APP_NAME}-${{ steps.version.outputs.VERSION }}.dmg"
+          DMG_PATH="build/$DMG_NAME"
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          CLEAN_VERSION="${VERSION#v}"
+
+          # Sign DMG with EdDSA and extract signature info
+          SIGN_OUTPUT=$(echo "$SPARKLE_ED_PRIVATE_KEY" | /tmp/sparkle-tools/bin/sign_update "$DMG_PATH" --ed-key-file - 2>&1)
+          echo "sign_update output: $SIGN_OUTPUT"
+
+          ED_SIGNATURE=$(echo "$SIGN_OUTPUT" | grep -o 'sparkle:edSignature="[^"]*"' | sed 's/sparkle:edSignature="//;s/"//')
+          FILE_LENGTH=$(echo "$SIGN_OUTPUT" | grep -o 'length="[^"]*"' | sed 's/length="//;s/"//')
+
+          if [ -z "$ED_SIGNATURE" ] || [ -z "$FILE_LENGTH" ]; then
+            echo "::warning::Could not extract EdDSA signature. Appcast not updated."
+            echo "Full output: $SIGN_OUTPUT"
+            exit 0
+          fi
+
+          DOWNLOAD_URL="https://github.com/vetlehf/gazeswitch/releases/download/${VERSION}/${DMG_NAME}"
+          PUB_DATE=$(date -u +"%a, %d %b %Y %H:%M:%S %z")
+
+          cat > /tmp/appcast.xml << APPCAST_EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+            <channel>
+              <title>GazeSwitch Updates</title>
+              <link>https://raw.githubusercontent.com/vetlehf/gazeswitch/main/appcast.xml</link>
+              <description>Most recent changes with links to updates.</description>
+              <language>en</language>
+              <item>
+                <title>Version ${CLEAN_VERSION}</title>
+                <pubDate>${PUB_DATE}</pubDate>
+                <sparkle:version>${CLEAN_VERSION}</sparkle:version>
+                <sparkle:shortVersionString>${CLEAN_VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+                <enclosure
+                  url="${DOWNLOAD_URL}"
+                  sparkle:edSignature="${ED_SIGNATURE}"
+                  length="${FILE_LENGTH}"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          APPCAST_EOF
+
+          # Commit appcast.xml to main branch
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          cp /tmp/appcast.xml appcast.xml
+          git add appcast.xml
+          git commit -m "chore: update appcast.xml for ${VERSION}" || echo "No changes to commit"
+          git push origin main
 
       # --- Notarize (poll-based, non-blocking) ---
       - name: Notarize and staple

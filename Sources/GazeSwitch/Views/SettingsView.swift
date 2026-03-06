@@ -4,10 +4,11 @@ import AVFoundation
 
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
+    @EnvironmentObject var updaterService: UpdaterService
 
     var body: some View {
         TabView {
-            GeneralTab()
+            GeneralTab(updaterService: updaterService)
                 .environment(appState)
                 .tabItem {
                     Label("General", systemImage: "gear")
@@ -24,6 +25,7 @@ struct SettingsView: View {
 
 private struct GeneralTab: View {
     @Environment(AppState.self) private var appState
+    @ObservedObject var updaterService: UpdaterService
     @State private var dwellTime: Double = 0.3
     @State private var launchAtLogin: Bool = false
     @State private var cameras: [AVCaptureDevice] = []
@@ -78,6 +80,13 @@ private struct GeneralTab: View {
                             GazeLog.engine.error("Login item error: \(error.localizedDescription, privacy: .public)")
                         }
                     }
+            }
+
+            Section("Updates") {
+                Toggle("Automatically check for updates", isOn: Binding(
+                    get: { updaterService.automaticallyChecksForUpdates },
+                    set: { updaterService.automaticallyChecksForUpdates = $0 }
+                ))
             }
 
             Section("Shortcut") {

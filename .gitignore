@@ -9,3 +9,6 @@ DerivedData/
 .netrc
 *.dmg
 firebase-debug.log
+# Sparkle EdDSA private key (never commit)
+sparkle_private_key
+eddsa_private_key
