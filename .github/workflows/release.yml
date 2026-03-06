@@ -24,21 +24,28 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
+      # --- Keychain setup (GitHub official pattern) ---
       - name: Import signing certificate
         if: env.MACOS_CERTIFICATE != ''
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-          KEYCHAIN_PWD: ${{ secrets.KEYCHAIN_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PWD }}
         run: |
-          echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
-          security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
-          rm certificate.p12
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
+          echo -n "$MACOS_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$MACOS_CERTIFICATE_PWD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+      # --- Build ---
       - name: Build release binary
         run: swift build -c release $SWIFT_FLAGS
 
@@ -51,6 +58,7 @@ jobs:
           cp Sources/GazeSwitch/Resources/Info.plist $APP_BUNDLE/Contents/Info.plist
           cp Sources/GazeSwitch/Resources/AppIcon.icns $APP_BUNDLE/Contents/Resources/AppIcon.icns
 
+      # --- Sign ---
       - name: Sign with Developer ID
         if: env.MACOS_CERTIFICATE != ''
         env:
@@ -69,26 +77,77 @@ jobs:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
         run: codesign --force --sign - --entitlements $ENTITLEMENTS --deep $APP_BUNDLE
 
+      # --- Package ---
       - name: Create DMG
         run: |
           DMG_NAME="${APP_NAME}-${{ steps.version.outputs.VERSION }}.dmg"
           hdiutil create -volname "$APP_NAME" -srcfolder $APP_BUNDLE -ov -format UDZO "build/$DMG_NAME"
 
-      - name: Notarize
-        if: env.NOTARIZE_APPLE_ID != ''
-        env:
-          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
-        run: |
-          DMG_NAME="${APP_NAME}-${{ steps.version.outputs.VERSION }}.dmg"
-          xcrun notarytool store-credentials "AC_PASSWORD" \
-            --apple-id "${{ secrets.NOTARIZE_APPLE_ID }}" \
-            --team-id "${{ secrets.NOTARIZE_TEAM_ID }}" \
-            --password "${{ secrets.NOTARIZE_PASSWORD }}"
-          xcrun notarytool submit "build/$DMG_NAME" --keychain-profile "AC_PASSWORD" --wait
-          xcrun stapler staple "build/$DMG_NAME"
-
+      # --- Release (before notarization so it always gets created) ---
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: build/GazeSwitch-*.dmg
           generate_release_notes: true
+
+      # --- Notarize (poll-based, non-blocking) ---
+      - name: Notarize and staple
+        if: env.NOTARIZE_APPLE_ID != ''
+        timeout-minutes: 25
+        env:
+          NOTARIZE_APPLE_ID: ${{ secrets.NOTARIZE_APPLE_ID }}
+          NOTARIZE_TEAM_ID: ${{ secrets.NOTARIZE_TEAM_ID }}
+          NOTARIZE_PASSWORD: ${{ secrets.NOTARIZE_PASSWORD }}
+        run: |
+          DMG_NAME="${APP_NAME}-${{ steps.version.outputs.VERSION }}.dmg"
+          DMG_PATH="build/$DMG_NAME"
+
+          # Store credentials
+          xcrun notarytool store-credentials "AC_PASSWORD" \
+            --apple-id "$NOTARIZE_APPLE_ID" \
+            --team-id "$NOTARIZE_TEAM_ID" \
+            --password "$NOTARIZE_PASSWORD"
+
+          # Submit without --wait
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" --keychain-profile "AC_PASSWORD" 2>&1)
+          echo "$SUBMIT_OUTPUT"
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep "id:" | head -1 | awk '{print $2}')
+
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "::warning::Failed to submit for notarization"
+            exit 0
+          fi
+
+          echo "Submission ID: $SUBMISSION_ID"
+
+          # Poll for completion (max 20 minutes, 15s intervals)
+          MAX_ATTEMPTS=80
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            sleep 15
+            STATUS=$(xcrun notarytool info "$SUBMISSION_ID" --keychain-profile "AC_PASSWORD" 2>&1)
+            echo "$STATUS"
+
+            if echo "$STATUS" | grep -q "status: Accepted"; then
+              echo "Notarization accepted!"
+              xcrun stapler staple "$DMG_PATH"
+              echo "Stapled. Uploading notarized DMG to release..."
+              gh release upload "${{ steps.version.outputs.VERSION }}" "$DMG_PATH" --clobber
+              echo "Release updated with notarized DMG."
+              exit 0
+            fi
+
+            if echo "$STATUS" | grep -q "status: Invalid"; then
+              echo "::warning::Notarization rejected by Apple. Fetching log..."
+              xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "AC_PASSWORD" 2>&1 || true
+              exit 0
+            fi
+
+            echo "Attempt $i/$MAX_ATTEMPTS — still in progress..."
+          done
+
+          echo "::warning::Notarization timed out after 20 minutes. Release was created without notarization."
+
+      # --- Cleanup (GitHub official pattern) ---
+      - name: Clean up keychain
+        if: ${{ always() }}
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
