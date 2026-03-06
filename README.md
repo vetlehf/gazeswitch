@@ -24,7 +24,7 @@ GazeSwitch is a macOS menu bar app that uses your webcam to track eye gaze and a
 
 ## Install
 
-### Homebrew (coming soon)
+### Homebrew
 
 ```bash
 brew tap vetlehf/tap
