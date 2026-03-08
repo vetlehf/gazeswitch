@@ -9,7 +9,7 @@ GazeSwitch is a macOS menu bar app that uses your webcam to track eye gaze and a
 ## Features
 
 - **Eye + head tracking** — uses both pupils and head yaw for accurate gaze estimation
-- **5-point calibration** — calibrates center and four corners per monitor
+- **Quick calibration** — look at the center of each monitor to calibrate
 - **Multi-monitor support** — works with any number of connected displays
 - **Dwell timer** — configurable delay prevents accidental switches (default 300ms)
 - **Hysteresis cooldown** — prevents rapid flickering when looking near monitor boundaries
@@ -44,7 +44,7 @@ make install
 
 1. Launch GazeSwitch — it appears in your menu bar as an eye icon
 2. Click the menu bar icon and select **Calibrate...**
-3. Follow the 5-point calibration for each monitor (look at the indicated position and press Space)
+3. Look at the center of each monitor and press Space to calibrate
 4. Press **Cmd+Shift+E** or click **Start Tracking** to begin
 5. Look at a monitor — your cursor follows your gaze
 

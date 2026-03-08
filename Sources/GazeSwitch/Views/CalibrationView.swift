@@ -17,9 +17,9 @@ struct CalibrationView: View {
         MonitorInfo.allMonitors()
     }
 
-    private var totalSteps: Int { screens.count * CalibrationPosition.allCases.count }
-    private var currentScreenIndex: Int { currentStep / CalibrationPosition.allCases.count }
-    private var currentPosition: CalibrationPosition { CalibrationPosition.allCases[currentStep % CalibrationPosition.allCases.count] }
+    private var totalSteps: Int { screens.count }
+    private var currentScreenIndex: Int { currentStep }
+    private var currentPosition: CalibrationPosition { .center }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -49,7 +49,7 @@ struct CalibrationView: View {
             Text("Step \(currentStep + 1) of \(totalSteps)")
                 .font(.headline)
 
-            Text("Look at the **\(positionLabel)** of **\(screens[currentScreenIndex].name)** and press the button below.")
+            Text("Look at the **center** of **\(screens[currentScreenIndex].name)** and press the button below.")
                 .multilineTextAlignment(.center)
 
             Circle()
@@ -79,7 +79,7 @@ struct CalibrationView: View {
             Text("Calibration Complete!")
                 .font(.headline)
 
-            Text("\(screens.count) monitors calibrated (5 points each).")
+            Text("\(screens.count) monitors calibrated.")
                 .foregroundColor(.secondary)
 
             Button("Done") {
